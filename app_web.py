@@ -8,7 +8,8 @@ DB_FILE = "pressione_battiti.csv"
 
 def carica_dati():
   try:
-    return pd.read_csv(DB_FILE)
+    # Usiamo sep=';' per separare perfettamente le colonne in Excel
+    return pd.read_csv(DB_FILE, sep=";")
   except FileNotFoundError:
     return pd.DataFrame(
         columns=["Data e Ora", "Massima", "Minima", "Battiti (BPM)"]
@@ -16,7 +17,8 @@ def carica_dati():
 
 
 def salva_dati(df):
-  df.to_csv(DB_FILE, index=False)
+  # Salviamo usando sep=';' così si apre dritto nelle colonne di Excel
+  df.to_csv(DB_FILE, index=False, sep=";")
 
 
 # --- STILE GRAFICO (BLU E BIANCO) ---
@@ -51,7 +53,7 @@ st.subheader("📝 Nuova Misurazione")
 oggi = datetime.date.today()
 ora_adesso = datetime.datetime.now().time()
 
-# Inserimento manuale di data e ora (per rimediare alle dimenticanze)
+# Inserimento manuale di data e ora
 data_inserita = st.date_input("Data della misurazione", value=oggi)
 ora_inserita = st.time_input("Ora della misurazione", value=ora_adesso)
 
@@ -98,19 +100,16 @@ st.markdown("---")
 st.subheader("📊 Storico Misurazioni e Report Medico")
 
 if not df_storico.empty:
-  # Mostriamo lo storico completo
   st.dataframe(df_storico, use_container_width=True)
 
   st.markdown("---")
   st.subheader("✉️ Invia Report al Medico per Periodo (Da - A)")
 
-  # Conversione colonna data per il filtro
   df_storico["Data_Solo"] = pd.to_datetime(df_storico["Data e Ora"]).dt.date
 
   min_data_db = df_storico["Data_Solo"].min()
   max_data_db = df_storico["Data_Solo"].max()
 
-  # Selettori delle date "Da" e "A"
   col_date1, col_date2 = st.columns(2)
   with col_date1:
     data_inizio = st.date_input(
@@ -125,7 +124,6 @@ if not df_storico.empty:
       "Indirizzo email del medico:", "medico@esempio.it"
   )
 
-  # Filtraggio dei dati in base alle date scelte
   mask = (df_storico["Data_Solo"] >= data_inizio) & (
       df_storico["Data_Solo"] <= data_fine
   )
