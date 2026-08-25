@@ -8,16 +8,21 @@ DB_FILE = "pressione_battiti.csv"
 
 def carica_dati():
   try:
-    # Usiamo sep=';' per separare perfettamente le colonne in Excel
-    return pd.read_csv(DB_FILE, sep=";")
-  except FileNotFoundError:
+    # Proviamo a leggere con il punto e virgola
+    df = pd.read_csv(DB_FILE, sep=";")
+    # Controllo di sicurezza: se per caso il file ha una sola colonna, lo resetto pulito
+    if "Data e Ora" not in df.columns:
+      return pd.DataFrame(
+          columns=["Data e Ora", "Massima", "Minima", "Battiti (BPM)"]
+      )
+    return df
+  except (FileNotFoundError, pd.errors.EmptyDataError):
     return pd.DataFrame(
         columns=["Data e Ora", "Massima", "Minima", "Battiti (BPM)"]
     )
 
 
 def salva_dati(df):
-  # Salviamo usando sep=';' così si apre dritto nelle colonne di Excel
   df.to_csv(DB_FILE, index=False, sep=";")
 
 
@@ -25,7 +30,6 @@ def salva_dati(df):
 st.markdown(
     """
     <style>
-    /* Pulsanti principali */
     .stButton>button {
         background-color: #0056b3;
         color: white;
@@ -53,7 +57,6 @@ st.subheader("📝 Nuova Misurazione")
 oggi = datetime.date.today()
 ora_adesso = datetime.datetime.now().time()
 
-# Inserimento manuale di data e ora
 data_inserita = st.date_input("Data della misurazione", value=oggi)
 ora_inserita = st.time_input("Ora della misurazione", value=ora_adesso)
 
@@ -99,7 +102,7 @@ with col2:
 st.markdown("---")
 st.subheader("📊 Storico Misurazioni e Report Medico")
 
-if not df_storico.empty:
+if not df_storico.empty and "Data e Ora" in df_storico.columns:
   st.dataframe(df_storico, use_container_width=True)
 
   st.markdown("---")
