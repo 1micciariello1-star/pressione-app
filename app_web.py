@@ -10,8 +10,12 @@ def carica_dati():
   try:
     # Proviamo a leggere con il punto e virgola
     df = pd.read_csv(DB_FILE, sep=";")
-    # Controllo di sicurezza: se per caso il file ha una sola colonna, lo resetto pulito
-    if "Data e Ora" not in df.columns:
+    # Se il file ha colonne strane o doppie, lo ripuliamo resettandolo
+    if (
+        "Data e Ora" not in df.columns
+        or "Massima" not in df.columns
+        or len(df.columns) > 4
+    ):
       return pd.DataFrame(
           columns=["Data e Ora", "Massima", "Minima", "Battiti (BPM)"]
       )
@@ -82,7 +86,7 @@ with col1:
         "Minima": int(minima),
         "Battiti (BPM)": int(battiti),
     }])
-    df_storico = pd.concat([df_storico, nuova_riga], ignore_index=True)
+    df_storico = pd.concat([df_storico, nueva_riga], ignore_index=True)
     df_storico = df_storico.sort_values(by="Data e Ora", ascending=False)
     salva_dati(df_storico)
     st.success("Misurazione salvata con successo!")
