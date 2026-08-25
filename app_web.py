@@ -1,30 +1,48 @@
 ﻿import datetime
+import urllib.parse
 import pandas as pd
 import streamlit as st
 
-# Nome del file in cui salviamo le misurazioni in locale/sul cloud temporaneo
 DB_FILE = "pressione_battiti.csv"
 
 
-# Funzione per caricare i dati salvati
 def carica_dati():
   try:
     return pd.read_csv(DB_FILE)
   except FileNotFoundError:
-    # Se il file non esiste ancora, creiamo una tabella vuota
     return pd.DataFrame(
         columns=["Data e Ora", "Massima", "Minima", "Battiti (BPM)"]
     )
 
 
-# Funzione per salvare i dati
 def salva_dati(df):
   df.to_csv(DB_FILE, index=False)
 
 
+# --- STILE GRAFICO (BLU E BIANCO) ---
+st.markdown(
+    """
+    <style>
+    /* Pulsanti principali */
+    .stButton>button {
+        background-color: #0056b3;
+        color: white;
+        border-radius: 5px;
+        border: none;
+        padding: 8px 16px;
+        font-weight: bold;
+    }
+    .stButton>button:hover {
+        background-color: #004085;
+        color: white;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 st.title("❤️ Monitor Pressione e Battiti")
 
-# Carichiamo i dati attuali
 df_storico = carica_dati()
 
 # --- SEZIONE NUOVA MISURAZIONE ---
@@ -33,7 +51,7 @@ st.subheader("📝 Nuova Misurazione")
 oggi = datetime.date.today()
 ora_adesso = datetime.datetime.now().time()
 
-# Campi modificabili a mano per rimediare a eventuali dimenticanze
+# Inserimento manuale di data e ora (per rimediare alle dimenticanze)
 data_inserita = st.date_input("Data della misurazione", value=oggi)
 ora_inserita = st.time_input("Ora della misurazione", value=ora_adesso)
 
@@ -60,7 +78,6 @@ with col1:
         "Battiti (BPM)": int(battiti),
     }])
     df_storico = pd.concat([df_storico, nuova_riga], ignore_index=True)
-    # Ordiniamo per data/ora (dalla più recente)
     df_storico = df_storico.sort_values(by="Data e Ora", ascending=False)
     salva_dati(df_storico)
     st.success("Misurazione salvata con successo!")
@@ -69,56 +86,82 @@ with col1:
 with col2:
   if st.button("🗑️ Cancella ultima immissione"):
     if not df_storico.empty:
-      df_storico = df_storico.iloc[1:]  # Rimuove la prima riga
+      df_storico = df_storico.iloc[1:]
       salva_dati(df_storico)
       st.warning("Ultima misurazione eliminata.")
       st.rerun()
     else:
       st.info("Non ci sono misurazioni da cancellare.")
 
-# --- SEZIONE STORICO MISURAZIONI (Per vedere i dati e darli al medico) ---
+# --- SEZIONE STORICO E REPORT PER IL MEDICO ---
 st.markdown("---")
-st.subheader("📊 Storico Misurazioni")
+st.subheader("📊 Storico Misurazioni e Report Medico")
 
 if not df_storico.empty:
-  # Mostriamo la tabella interattiva
+  # Mostriamo lo storico completo
   st.dataframe(df_storico, use_container_width=True)
 
-  # --- INOLTRO AL MEDICO VIA EMAIL ---
   st.markdown("---")
-  st.subheader("✉️ Invia Report al Medico")
+  st.subheader("✉️ Invia Report al Medico per Periodo (Da - A)")
 
-  email_medico = st.text_input(
-      "Inserisci l'indirizzo email del medico:", "medico@esempio.it"
-  )
+  # Conversione colonna data per il filtro
+  df_storico["Data_Solo"] = pd.to_datetime(df_storico["Data e Ora"]).dt.date
 
-  # Prepariamo il testo delle misurazioni formattato per l'email
-  testo_report = "Buongiorno dottore, le invio il mio report di pressione e battiti:\n\n"
-  for index, row in df_storico.iterrows():
-    testo_report += (
-        f"- {row['Data e Ora']} | Max: {row['Massima']} | Min:"
-        f" {row['Minima']} | BPM: {row['Battiti (BPM)']}\n"
+  min_data_db = df_storico["Data_Solo"].min()
+  max_data_db = df_storico["Data_Solo"].max()
+
+  # Selettori delle date "Da" e "A"
+  col_date1, col_date2 = st.columns(2)
+  with col_date1:
+    data_inizio = st.date_input(
+        "Data Inizio (Da)", value=min_data_db, min_value=min_data_db
+    )
+  with col_date2:
+    data_fine = st.date_input(
+        "Data Fine (A)", value=max_data_db, max_value=max_data_db
     )
 
-  import urllib.parse
-
-  subject = urllib.parse.quote("Report Pressione e Battiti - Luciano")
-  body = urllib.parse.quote(testo_report)
-  mailto_link = f"mailto:{email_medico}?subject={subject}&body={body}"
-
-  # Pulsante link per aprire il programma di posta con i dati già dentro
-  st.markdown(
-      f'<a href="{mailto_link}" target="_blank"><button'
-      ' style="background-color:#FF4B4B; color:white; border:none; padding:10px'
-      ' 20px; border-radius:5px; cursor:pointer; font-size:16px;">📧 Apri'
-      ' Email con Report per il Medico</button></a>',
-      unsafe_allow_html=True,
+  email_medico = st.text_input(
+      "Indirizzo email del medico:", "medico@esempio.it"
   )
+
+  # Filtraggio dei dati in base alle date scelte
+  mask = (df_storico["Data_Solo"] >= data_inizio) & (
+      df_storico["Data_Solo"] <= data_fine
+  )
+  df_filtrato = df_storico.loc[mask]
+
+  if not df_filtrato.empty:
+    testo_report = (
+        f"Buongiorno dottore, le invio il mio report di pressione e battiti dal"
+        f" {data_inizio} al {data_fine}:\n\n"
+    )
+    for index, row in df_filtrato.iterrows():
+      testo_report += (
+          f"- {row['Data e Ora']} | Max: {row['Massima']} | Min:"
+          f" {row['Minima']} | BPM: {row['Battiti (BPM)']}\n"
+      )
+
+    subject = urllib.parse.quote(
+        f"Report Pressione ({data_inizio} / {data_fine}) - Luciano"
+    )
+    body = urllib.parse.quote(testo_report)
+    mailto_link = f"mailto:{email_medico}?subject={subject}&body={body}"
+
+    st.markdown(
+        f'<a href="{mailto_link}" target="_blank"><button'
+        ' style="background-color:#0056b3; color:white; border:none;'
+        " padding:10px 20px; border-radius:5px; cursor:pointer; font-size:16px;"
+        ' font-weight:bold;">📧 Invia Email con Report Selezionato</button></a>',
+        unsafe_allow_html=True,
+    )
+  else:
+    st.warning(
+        "Nessuna misurazione trovata nell'intervallo di date selezionato."
+    )
 
 else:
-  st.info(
-      "Nessuna misurazione salvata al momento. Inserisci la prima qui sopra!"
-  )
+  st.info("Nessuna misurazione salvata al momento.")
 
 # --- TASTO ESCI ---
 st.markdown("---")
